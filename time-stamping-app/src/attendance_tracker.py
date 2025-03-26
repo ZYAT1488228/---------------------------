@@ -1,6 +1,6 @@
 import datetime
 import os
-import json
+from openpyxl import Workbook, load_workbook
 
 class AttendanceTracker:
     def __init__(self):
@@ -15,54 +15,59 @@ class AttendanceTracker:
             "0285212710": "Люба",
             "0285212711": "Вовичк"
         }
-        self.log_directory = "attendance_logs"
-        if not os.path.exists(self.log_directory):
-            os.makedirs(self.log_directory)
+        self.excel_file = "attendance.xlsx"
+        if not os.path.exists(self.excel_file):
+            self.create_excel_file()
+
+    def create_excel_file(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Attendance"
+        ws.append(["Дата", "UID", "Имя", "Статус", "Время"])
+        wb.save(self.excel_file)
 
     def log_attendance(self, uid):
         current_time = datetime.datetime.now()
         name = self.uid_to_name.get(uid, "Неизвестный")
         status = "пришел" if self.is_odd_entry(uid) else "ушел"
         log_message = f"{name} (UID: {uid}) {status} в {current_time}"
-        self.write_to_file(uid, name, current_time, status)
+        self.write_to_excel(uid, name, current_time, status)
         return log_message
 
     def is_odd_entry(self, uid):
+        wb = load_workbook(self.excel_file)
+        ws = wb.active
         count = 0
-        for filename in os.listdir(self.log_directory):
-            with open(os.path.join(self.log_directory, filename), "r", encoding="utf-8") as file:
-                for line in file:
-                    if f"(UID: {uid})" in line:
-                        count += 1
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[1] == uid:
+                count += 1
         return count % 2 == 0
 
-    def write_to_file(self, uid, name, current_time, status):
-        date_str = current_time.strftime("%Y-%m-%d")
-        filename = os.path.join(self.log_directory, f"{date_str}.txt")
-        with open(filename, "a", encoding="utf-8") as file:
-            file.write(f"{current_time} - {name} (UID: {uid}) {status}\n")
+    def write_to_excel(self, uid, name, current_time, status):
+        wb = load_workbook(self.excel_file)
+        ws = wb.active
+        ws.append([current_time.strftime("%Y-%m-%d"), uid, name, status, current_time.strftime("%H:%M:%S")])
+        wb.save(self.excel_file)
 
     def get_attendance(self, date):
         date_str = date.strftime("%Y-%m-%d")
-        filename = os.path.join(self.log_directory, f"{date_str}.txt")
-        if not os.path.exists(filename):
-            return []
-        with open(filename, "r", encoding="utf-8") as file:
-            return file.readlines()
+        wb = load_workbook(self.excel_file)
+        ws = wb.active
+        attendance_data = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] == date_str:
+                attendance_data.append(f"{row[2]} (UID: {row[1]}) {row[3]} в {row[4]}\n")
+        return attendance_data
 
     def calculate_hours(self, month):
+        wb = load_workbook(self.excel_file)
+        ws = wb.active
         attendance_log = {uid: [] for uid in self.uid_to_name.keys()}
-        for filename in os.listdir(self.log_directory):
-            if filename.startswith(month):
-                with open(os.path.join(self.log_directory, filename), "r", encoding="utf-8") as file:
-                    for line in file:
-                        parts = line.strip().split(" - ")
-                        if len(parts) == 2:
-                            timestamp, info = parts
-                            uid = info.split(" (UID: ")[1].split(")")[0]
-                            if uid in self.uid_to_name:
-                                time = datetime.datetime.fromisoformat(timestamp)
-                                attendance_log[uid].append(time)
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            date, uid, name, status, time = row
+            if date.startswith(month):
+                timestamp = datetime.datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
+                attendance_log[uid].append(timestamp)
         hours_worked = {}
         for uid, times in attendance_log.items():
             total_seconds = 0
@@ -74,14 +79,11 @@ class AttendanceTracker:
 
     def edit_attendance(self, date, old_entry, new_entry):
         date_str = date.strftime("%Y-%m-%d")
-        filename = os.path.join(self.log_directory, f"{date_str}.txt")
-        if not os.path.exists(filename):
-            return
-        with open(filename, "r", encoding="utf-8") as file:
-            lines = file.readlines()
-        with open(filename, "w", encoding="utf-8") as file:
-            for line in lines:
-                if line.strip() == old_entry.strip():
-                    file.write(new_entry + "\n")
-                else:
-                    file.write(line)
+        wb = load_workbook(self.excel_file)
+        ws = wb.active
+        for row in ws.iter_rows(min_row=2):
+            if row[0].value == date_str and row[1].value == old_entry.split(" (UID: ")[1].split(")")[0]:
+                row[2].value = new_entry.split(" (UID: ")[0]
+                row[3].value = new_entry.split(" (UID: ")[1].split(")")[0]
+                row[4].value = new_entry.split(" в ")[1]
+        wb.save(self.excel_file)

@@ -85,7 +85,7 @@ class App:
         frame = ttk.Frame(self.root, padding="20")
         frame.pack(expand=True, fill=tk.BOTH)
 
-        ttk.Label(frame, text="Выберите месяц для подсчета времени", font=("Helvetica", 20)).pack(pady=20)
+        ttk.Label(frame, text="Введите месяц для подсчета времени (ГГГГ-ММ)", font=("Helvetica", 20)).pack(pady=20)
         month_entry = tk.Entry(frame, font=("Helvetica", 16))
         month_entry.pack(pady=10)
         self.create_button(frame, "Показать данные", lambda: self.show_hours(month_entry.get())).pack(pady=10)
