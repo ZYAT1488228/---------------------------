@@ -1,6 +1,7 @@
 import datetime
 import os
 from openpyxl import Workbook, load_workbook
+import logging
 
 class AttendanceTracker:
     def __init__(self):
@@ -29,8 +30,12 @@ class AttendanceTracker:
     def log_attendance(self, uid):
         current_time = datetime.datetime.now()
         name = self.uid_to_name.get(uid, "Неизвестный")
+        if name == "Неизвестный":
+            logging.debug(f"UID {uid} не распознан, пропуск записи.")
+            return None
         status = "пришел" if self.is_odd_entry(uid) else "ушел"
         log_message = f"{name} (UID: {uid}) {status} в {current_time}"
+        logging.debug(f"Логирование посещения: {log_message}")
         self.write_to_excel(uid, name, current_time, status)
         return log_message
 
@@ -48,6 +53,7 @@ class AttendanceTracker:
         ws = wb.active
         ws.append([current_time.strftime("%Y-%m-%d"), uid, name, status, current_time.strftime("%H:%M:%S")])
         wb.save(self.excel_file)
+        logging.debug(f"Запись в Excel: UID={uid}, Имя={name}, Время={current_time}, Статус={status}")
 
     def get_attendance(self, date):
         date_str = date.strftime("%Y-%m-%d")
